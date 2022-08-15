@@ -36,10 +36,6 @@ OTHER DEALINGS IN THE SOFTWARE.
 #include "driver/i2c.h"
 #include <esp_err.h>
 
-extern uint8_t SX_SDA_PIN;
-extern uint8_t SX_SCL_PIN;
-extern uint8_t SX_I2C_PORT;
-
 //TODO: implement PLD (Programmable Logic Functions)
 
 #define SX1503_I2C_ADDR             0x20  // Not configurable for SX1503.
@@ -93,17 +89,15 @@ typedef enum {
  *  @brief  Struct that stores the states of the SX1503.
  */
 typedef struct{
-    i2c_config_t conf;
+    uint8_t i2c_port;
+    uint8_t rst_pin;
     bool init;
     bool autoclear_on_read;
     bool boost_mode;
-    uint8_t irq_pin;
-    uint8_t rst_pin;
 } ESP32_SX1503;
 
 
-void SX_init(ESP32_SX1503* SX, uint8_t irq_pin, uint8_t reset_pin);
-void SX_deinit();
+void SX_init(ESP32_SX1503* SX, uint8_t rst_pin, uint8_t i2c_port);
 void SX_reset(ESP32_SX1503* SX);
 
 // Basic usage as pins...
@@ -114,6 +108,7 @@ void SX_digitalWrite(ESP32_SX1503* SX, uint8_t pin, bool value);
 int8_t SX_digitalRead(ESP32_SX1503* SX, uint8_t pin);
 
 // Fast GPIO write/read functions (write/read all pins at once)
+void SX_fast_gpioMode(ESP32_SX1503* SX, uint8_t buffer[2]);
 void SX_fast_gpioRead(ESP32_SX1503* SX, uint8_t buffer[2]);
 void SX_fast_gpioWrite(ESP32_SX1503* SX, uint8_t buffer[2]);
 

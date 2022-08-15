@@ -6,20 +6,30 @@
 
 #include "ESP32_SX1503.h"
 
-uint8_t SX_SDA_PIN=18;
-uint8_t SX_SCL_PIN=19;
-uint8_t SX_I2C_PORT=0;
-uint8_t SX_IRQ_PIN=10; //random number
-uint8_t SX_RST_PIN=5; //random number
-
-
 static const char *TAG = "Demo-SX1503";
 
+#define SDA_PIN (27)
+#define SCL_PIN (32)
+#define I2C_PORT (0)
+#define SX_RST_PIN (26)
+
+I2C_CONF={
+    .mode = I2C_MODE_MASTER;
+    .sda_io_num = SDA_PIN;
+    .scl_io_num = SCL_PIN;
+    .sda_pullup_en = GPIO_PULLUP_DISABLE;     //disable if you have external pullup
+    .scl_pullup_en = GPIO_PULLUP_DISABLE;
+    .master.clk_speed = 400000;               //I2C Full Speed
+}
 void SX1503_task(){
+    //Install I2C Driver
+    ESP_ERROR_CHECK(i2c_param_config(I2C_PORT, &(I2C_CONF)));
+    ESP_ERROR_CHECK(i2c_driver_install(I2C_PORT, I2C_MODE_MASTER, 0, 0, 0));
+
     for(;;){
         ESP32_SX1503 SX1503={0};
         ESP_LOGI(TAG, "SX1503 task started");
-        SX_init(&SX1503, SX_IRQ_PIN, SX_RST_PIN);
+        SX_init(&SX1503, SX_RST_PIN, I2C_PORT);
 
         SX_gpioMode(&SX1503, 10, SX_MODE_INPUT);
         SX_gpioPulldown(&SX1503, 10, true);
@@ -37,9 +47,9 @@ void SX1503_task(){
         SX_fast_gpioRead(&SX1503, SX_gpios);
         ESP_LOGI(TAG, "SX_gpios values: %d %d", SX_gpios[0], SX_gpios[1]);
 
-        SX_deinit();
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
+    ESP_ERROR_CHECK(i2c_driver_delete(I2C_PORT));
 }
 
 void app_main(void)
