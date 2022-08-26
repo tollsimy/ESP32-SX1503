@@ -122,6 +122,8 @@ void SX_init(ESP32_SX1503* SX, uint8_t rst_pin, uint8_t i2c_port){
 void SX_reset(ESP32_SX1503* SX) {
     assert(SX->init==true && NOT_INIT);
 
+    ESP_ERROR_CHECK(gpio_set_direction(SX->rst_pin, GPIO_MODE_INPUT));
+    
     // If rst_pin is already low, it means that the SX150x is not initalized.
     if (gpio_get_level(SX->rst_pin) == 0) {
         vTaskDelay(15/portTICK_PERIOD_MS);   // Datasheet says 7ms.
@@ -385,7 +387,7 @@ void SX_clearInt(ESP32_SX1503* SX, uint8_t pin){
  * @param SX Pointer to the SX1503 structure
  * 
  * @param bufferInt Buffer containing the interrupt enable register for all pins 
- * (pin 0 to pin 15)
+ * (pin 0 to pin 15) -> 1 is on, 0 is off
  * 
  * @param bufferMode Buffer containing the interrupt mode register for all pins
  * (pin 0 to pin 15, 2 bits per pin) -> bufferMode[0] = pins 0 to 3, 
@@ -397,6 +399,9 @@ void SX_fast_enableInt(ESP32_SX1503* SX, uint8_t bufferInt[2], uint8_t bufferMod
 
     //reverse array, REG_B is first than REG_A
     uint8_t rev_bufferInt[2] = {bufferInt[1], bufferInt[0]};
+    //"NOT" the array, 1 is off, 0 is on
+    rev_bufferInt[0] = ~rev_bufferInt[0];
+    rev_bufferInt[1] = ~rev_bufferInt[1];
     write16(SX, SX1503_REG_IRQ_MASK_B, rev_bufferInt);
 
     //reverse and move in two arrays, reg order is REG_H_B, REG_H_A, REG_L_B, REG_L_A
