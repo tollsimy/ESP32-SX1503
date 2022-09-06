@@ -1,5 +1,6 @@
 SX150x - A library for the Semtech SX150x family of i2c GPIO expanders.
 Copyright (c) 2019 J. Ian Lindsay
+Copyright (c) 2022 Simone Tollardo
 
 Permission is hereby granted, free of charge, to any person
 obtaining a copy of this software and associated documentation

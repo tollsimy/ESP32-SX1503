@@ -113,6 +113,9 @@ void SX_init(ESP32_SX1503* SX, uint8_t rst_pin, uint8_t i2c_port){
     //Load default values
     SX->i2c_port = i2c_port;
     SX->rst_pin = rst_pin;
+
+    ESP_ERROR_CHECK(gpio_set_direction(SX->rst_pin, GPIO_MODE_INPUT));
+    
     SX->init = true;
 }
 
@@ -121,8 +124,6 @@ void SX_init(ESP32_SX1503* SX, uint8_t rst_pin, uint8_t i2c_port){
  */
 void SX_reset(ESP32_SX1503* SX) {
     assert(SX->init==true && NOT_INIT);
-
-    ESP_ERROR_CHECK(gpio_set_direction(SX->rst_pin, GPIO_MODE_INPUT));
     
     // If rst_pin is already low, it means that the SX150x is not initalized.
     if (gpio_get_level(SX->rst_pin) == 0) {
@@ -157,7 +158,8 @@ void SX_gpioMode(ESP32_SX1503* SX, uint8_t pin, sx1503_gpio_mode_t mode) {
     if (pin < 16) {
         uint8_t reg = (pin < 8) ? SX1503_REG_DIR_A : SX1503_REG_DIR_B;
 
-        // Restrict to 8-bits.
+        /* Restrict to 8-bits -> MSB (fourth bit) select the register
+        but only other three bits are useful to retrieve the shift */
         uint8_t pin_shift = pin & 0x07;
         //pin 0 becomes 0x01, pin 1 becomes 0x02, etc.
         uint8_t pin_hex = 0x01 << pin_shift;
@@ -171,13 +173,11 @@ void SX_gpioMode(ESP32_SX1503* SX, uint8_t pin, sx1503_gpio_mode_t mode) {
 /**
  * @brief  Set the mode for all GPIO pins: 0 = output, 1 = input
  * @param  SX pointer to the SX1503 structure
- * @param  buffer buffer to write (pin 0-7, pin 8-15)
+ * @param  buffer buffer to write (pin 15-8, pin 7-0)
  */
 void SX_fast_gpioMode(ESP32_SX1503* SX, uint8_t buffer[2]){
     assert(SX->init==true && NOT_INIT);
-    //reverse array
-    uint8_t rev_buffer[2] = {buffer[1], buffer[0]};
-    write16(SX, SX1503_REG_DIR_B, rev_buffer);
+    write16(SX, SX1503_REG_DIR_B, buffer);
 }
 
 void SX_gpioPullup(ESP32_SX1503* SX, uint8_t pin, bool enable) {
@@ -261,29 +261,22 @@ int8_t SX_digitalRead(ESP32_SX1503* SX, uint8_t pin) {
 /**
  * @brief  Read all the GPIO pins register and update the local copy
  * @param  SX pointer to the SX1503 structure
- * @param  buffer buffer to store the read data (pin 0-7, pin 8-15)
+ * @param  buffer buffer to store the read data (pin 15-8, pin 7-0)
  */
 void SX_fast_gpioRead(ESP32_SX1503* SX, uint8_t buffer[2]){
     assert(SX->init==true && NOT_INIT);
 
     read(SX, SX1503_REG_DATA_B, buffer, 2);
-    //reverse array before returning, REG_B is first than REG_A
-    uint8_t temp = buffer[0];
-    buffer[0] = buffer[1];
-    buffer[1] = temp;
 }
 
 /**
  * @brief  Write all the GPIO pins register from the buffer and update the local copy
  * @param  SX pointer to the SX1503 structure
- * @param  buffer buffer to write (pin 0-7, pin 8-15)
+ * @param  buffer buffer to write (pin 15-8, pin 7-0)
  */
 void SX_fast_gpioWrite(ESP32_SX1503* SX, uint8_t buffer[2]){
     assert(SX->init==true && NOT_INIT);
-
-    //reverse array, REG_B is first than REG_A
-    uint8_t rev_buffer[2] = {buffer[1], buffer[0]};
-    write16(SX, SX1503_REG_DATA_B, rev_buffer);
+    write16(SX, SX1503_REG_DATA_B, buffer);
 }
 
 // ----------------- INTERRUPT FUNCTIONS -----------------
@@ -387,28 +380,27 @@ void SX_clearInt(ESP32_SX1503* SX, uint8_t pin){
  * @param SX Pointer to the SX1503 structure
  * 
  * @param bufferInt Buffer containing the interrupt enable register for all pins 
- * (pin 0 to pin 15) -> 1 is on, 0 is off
+ * (pin 15 to pin 0) -> 1 is on, 0 is off
  * 
  * @param bufferMode Buffer containing the interrupt mode register for all pins
- * (pin 0 to pin 15, 2 bits per pin) -> bufferMode[0] = pins 0 to 3, 
- * bufferMode[1] = pins 4 to 7, bufferMode[2] = pins 8 to 11, 
- * bufferMode[3] = pins 12 to 15.
+ * (pin 15 to pin 0, 2 bits per pin) -> bufferMode[0] = pins 15 to 12, 
+ * bufferMode[1] = pins 11 to 8, bufferMode[2] = pins 7 to 4, 
+ * bufferMode[3] = pins 3 to 0.
  */
 void SX_fast_enableInt(ESP32_SX1503* SX, uint8_t bufferInt[2], uint8_t bufferMode[4]){
     assert(SX->init==true && NOT_INIT);
 
-    //reverse array, REG_B is first than REG_A
-    uint8_t rev_bufferInt[2] = {bufferInt[1], bufferInt[0]};
     //"NOT" the array, 1 is off, 0 is on
-    rev_bufferInt[0] = ~rev_bufferInt[0];
-    rev_bufferInt[1] = ~rev_bufferInt[1];
-    write16(SX, SX1503_REG_IRQ_MASK_B, rev_bufferInt);
+    bufferInt[0] = ~bufferInt[0];
+    bufferInt[1] = ~bufferInt[1];
+    write16(SX, SX1503_REG_IRQ_MASK_B, bufferInt);
 
-    //reverse and move in two arrays, reg order is REG_H_B, REG_H_A, REG_L_B, REG_L_A
-    uint8_t rev_bufferMode_H[2] = {bufferMode[4], bufferMode[2]};
-    uint8_t rev_bufferMode_L[2] = {bufferMode[3], bufferMode[1]};
-    write16(SX, SX1503_REG_SENSE_H_B, rev_bufferMode_H);
-    write16(SX, SX1503_REG_SENSE_L_B, rev_bufferMode_L);
+    //move in two arrays, reg order is REG_H_B, REG_H_A, REG_L_B, REG_L_A
+    uint8_t bufferMode_H[2] = {bufferMode[0], bufferMode[2]};
+    uint8_t bufferMode_L[2] = {bufferMode[1], bufferMode[3]};
+    write16(SX, SX1503_REG_SENSE_H_B, bufferMode_H);
+    write16(SX, SX1503_REG_SENSE_L_B, bufferMode_L);
+    
 }
 
 /**
